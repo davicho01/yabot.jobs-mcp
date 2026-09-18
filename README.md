@@ -106,6 +106,7 @@ unrelated to how Claude itself connects to this server now.
 | `evaluate_resume` | Score your main resume against a job posting |
 | `get_resume_evaluation` | Fetch the latest score for a job posting |
 | `upload_resume_evaluation` | Store a fit evaluation you computed yourself (rubric baked into the tool description), skipping the backend's LLM call |
+| `upload_tailored_resume_evaluation` | Store a fit evaluation of a specific tailored resume you computed yourself, skipping the backend's LLM call |
 | `upload_tailored_resume` | Upload a structured tailored resume for a job (rendered to .docx) |
 | `upload_cover_letter` | Upload a structured cover letter for a job (rendered to .docx) |
 
