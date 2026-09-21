@@ -1,9 +1,10 @@
 # Yabot Jobs MCP server
 
 A remote [MCP](https://modelcontextprotocol.io) server that lets an MCP
-client (Claude Desktop, Claude Code, etc.) search jobs, apply to one, score
-your resume against a job, and upload an HTML tailored resume / cover
-letter you've drafted — all against your own Yabot Jobs account.
+client (Claude Desktop, Claude Code, etc.) search jobs, apply to one, store
+a fit evaluation of your resume against a job that the client computed
+itself, and upload an HTML tailored resume / cover letter you've drafted —
+all against your own Yabot Jobs account.
 
 It's a thin process: every tool call is an HTTP request to the FastAPI
 backend (`main.py`), authenticated with a short-lived personal access token
@@ -103,7 +104,6 @@ unrelated to how Claude itself connects to this server now.
 | `update_application` | Update an application's status/notes/archived flag |
 | `delete_application` | Delete a tracked application |
 | `get_main_resume` | Fetch your main resume, including its extracted text |
-| `evaluate_resume` | Score your main resume against a job posting |
 | `get_resume_evaluation` | Fetch the latest score for a job posting |
 | `upload_resume_evaluation` | Store a fit evaluation you computed yourself (rubric baked into the tool description), skipping the backend's LLM call |
 | `upload_tailored_resume_evaluation` | Store a fit evaluation of a specific tailored resume you computed yourself, skipping the backend's LLM call |
