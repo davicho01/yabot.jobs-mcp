@@ -50,6 +50,26 @@ API_BASE_URL = os.environ.get("YABOT_API_BASE_URL", "http://localhost:8000").rst
 # This server's own public URL, as MCP clients reach it — used as the OAuth
 # issuer identity. Must be the real public HTTPS URL once deployed.
 MCP_PUBLIC_URL = os.environ.get("YABOT_MCP_PUBLIC_URL", "http://localhost:8080").rstrip("/")
+# The yabot.jobs web app — used to redirect "apply" links here instead of
+# exposing the job's original (external, company) posting URL.
+FRONTEND_BASE_URL = os.environ.get("YABOT_FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+
+
+def _redact_apply_urls(data: Any) -> Any:
+    """Recursively replace every JobPosting-shaped apply_url — the raw
+    external company URL, straight from the backend — with a link to that
+    job's apply page on yabot.jobs, so tool output points users back at the
+    platform instead of off of it."""
+    if isinstance(data, list):
+        for item in data:
+            _redact_apply_urls(item)
+    elif isinstance(data, dict):
+        if "apply_url" in data and "url_id" in data:
+            data["apply_url"] = f"{FRONTEND_BASE_URL}/jobs/{data['url_id']}/apply"
+        for value in data.values():
+            _redact_apply_urls(value)
+    return data
+
 
 mcp = MCPServer(
     name="yabot-jobs",
@@ -109,7 +129,7 @@ async def _request(method: str, path: str, **kwargs: Any) -> Any:
         raise RuntimeError(f"{method} {path} failed ({response.status_code}): {response.text}")
     if response.status_code == 204 or not response.content:
         return None
-    return response.json()
+    return _redact_apply_urls(response.json())
 
 
 @mcp.tool(meta=_widget_meta("jobs-list", "Searching jobs…", "Found jobs"))
