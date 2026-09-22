@@ -13,6 +13,8 @@ token, obtained via that flow.
 """
 
 import os
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -24,6 +26,25 @@ from mcp.server.mcpserver import MCPServer
 from oauth_provider import YabotOAuthProvider
 
 load_dotenv()
+
+WIDGETS_DIR = Path(__file__).parent / "widgets"
+
+
+@lru_cache(maxsize=None)
+def _widget_html(filename: str) -> str:
+    return (WIDGETS_DIR / filename).read_text()
+
+
+def _widget_meta(name: str, invoking: str, invoked: str) -> dict[str, Any]:
+    """_meta for a tool whose result should render as the named UI widget —
+    both the official MCP Apps extension (Claude) and OpenAI's Apps SDK
+    (ChatGPT) point at their own resource variant of the same widget."""
+    return {
+        "ui": {"resourceUri": f"ui://yabot-jobs/{name}"},
+        "openai/outputTemplate": f"ui://yabot-jobs/{name}.openai",
+        "openai/toolInvocation/invoking": invoking,
+        "openai/toolInvocation/invoked": invoked,
+    }
 
 API_BASE_URL = os.environ.get("YABOT_API_BASE_URL", "http://localhost:8000").rstrip("/")
 # This server's own public URL, as MCP clients reach it — used as the OAuth
@@ -54,6 +75,26 @@ mcp = MCPServer(
 )
 
 
+def _register_widget(name: str, filename: str) -> None:
+    """Register one widget's HTML twice: once as the official MCP Apps
+    resource (Claude, and any other MCP-Apps-conformant host) and once as
+    OpenAI's Apps SDK variant (ChatGPT) — they need distinct URIs because
+    each host expects its own mimetype on the resource."""
+
+    @mcp.resource(f"ui://yabot-jobs/{name}", name=f"{name}-mcp-app", mime_type="text/html;profile=mcp-app")
+    def mcp_app_resource() -> str:
+        return _widget_html(filename)
+
+    @mcp.resource(f"ui://yabot-jobs/{name}.openai", name=f"{name}-openai", mime_type="text/html+skybridge")
+    def openai_resource() -> str:
+        return _widget_html(filename)
+
+
+_register_widget("jobs-list", "jobs_list.html")
+_register_widget("applications-board", "applications_board.html")
+_register_widget("resume-score", "resume_score.html")
+
+
 async def _request(method: str, path: str, **kwargs: Any) -> Any:
     access_token = get_access_token()
     if access_token is None:
@@ -71,7 +112,7 @@ async def _request(method: str, path: str, **kwargs: Any) -> Any:
     return response.json()
 
 
-@mcp.tool()
+@mcp.tool(meta=_widget_meta("jobs-list", "Searching jobs…", "Found jobs"))
 async def search_jobs(
     query: str | None = None,
     location: str | None = None,
@@ -126,7 +167,7 @@ async def apply_to_job(url: str) -> dict[str, Any]:
     return await _request("PATCH", f"/applications/{application['id']}", json={"status": "applied"})
 
 
-@mcp.tool()
+@mcp.tool(meta=_widget_meta("applications-board", "Loading your applications…", "Loaded your applications"))
 async def list_applications() -> list[dict[str, Any]]:
     """List the current user's tracked job applications, most recent first —
     each includes its latest resume score, tailored resume, and cover letter, if any."""
@@ -167,7 +208,7 @@ async def get_main_resume() -> dict[str, Any]:
     return await _request("GET", "/resumes/main")
 
 
-@mcp.tool()
+@mcp.tool(meta=_widget_meta("resume-score", "Fetching your fit score…", "Fetched your fit score"))
 async def get_resume_evaluation(job_posting_id: str) -> dict[str, Any]:
     """Fetch the most recent resume-vs-job evaluation already computed for a job posting."""
     return await _request("GET", "/resumes/main/score", params={"job_posting_id": job_posting_id})
@@ -209,7 +250,8 @@ async def get_resume_evaluation(job_posting_id: str) -> dict[str, Any]:
         "matched_keywords / missing_keywords: short skill/qualification "
         "phrases from the job description that the resume does/doesn't "
         "demonstrate. summary: 2-4 sentences on overall fit."
-    )
+    ),
+    meta=_widget_meta("resume-score", "Storing your fit score…", "Stored your fit score"),
 )
 async def upload_resume_evaluation(
     job_posting_id: str,

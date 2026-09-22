@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --bg: #f7f7f8; --surface: #ffffff; --border: #e5e5ea; --text: #1d1d1f; --text-dim: #6e6e73;
+    --accent: #0071e3; --accent-deep: #0058b0;
+    --good: #1e8e3e; --good-bg: #e6f4ea; --warn: #c77c00; --warn-bg: #fdf0dc; --bad: #d93025; --bad-bg: #fbe7e6;
+    --font-display: "Outfit", system-ui, -apple-system, sans-serif;
+    --font-body: "Manrope", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-host-theme="light"]) {
+      --bg: #1c1c1e; --surface: #28282b; --border: #3a3a3d; --text: #f5f5f7; --text-dim: #a1a1a6;
+      --accent: #2997ff; --accent-deep: #6cb4ff;
+      --good: #34c759; --good-bg: rgba(52,199,89,0.16); --warn: #ffb340; --warn-bg: rgba(255,179,64,0.16);
+      --bad: #ff6961; --bad-bg: rgba(255,105,97,0.16);
+    }
+  }
+  :root[data-host-theme="dark"] {
+    --bg: #1c1c1e; --surface: #28282b; --border: #3a3a3d; --text: #f5f5f7; --text-dim: #a1a1a6;
+    --accent: #2997ff; --accent-deep: #6cb4ff;
+    --good: #34c759; --good-bg: rgba(52,199,89,0.16); --warn: #ffb340; --warn-bg: rgba(255,179,64,0.16);
+    --bad: #ff6961; --bad-bg: rgba(255,105,97,0.16);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 13px; }
+  .empty { color: var(--text-dim); padding: 24px 4px; text-align: center; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .ring-wrap { position: relative; width: 92px; height: 92px; flex: 0 0 auto; }
+  .ring-wrap svg { transform: rotate(-90deg); }
+  .ring-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+  .ring-score { font-family: var(--font-display); font-weight: 800; font-size: 22px; line-height: 1; }
+  .ring-caption { font-size: 9.5px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+  .body { flex: 1 1 220px; min-width: 200px; display: flex; flex-direction: column; gap: 10px; }
+  .summary { line-height: 1.5; }
+  .keywords h4 { margin: 0 0 5px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; }
+  .chip.matched { background: var(--good-bg); color: var(--good); }
+  .chip.missing { background: var(--border); color: var(--text-dim); }
+  .timestamp { font-size: 11px; color: var(--text-dim); }
+</style>
+</head>
+<body>
+<div id="root"><p class="empty">Loading…</p></div>
+<script>
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  }
+  function scoreColorVar(score) {
+    if (score >= 75) return "var(--good)";
+    if (score >= 50) return "var(--warn)";
+    return "var(--bad)";
+  }
+
+  function createBridge(onData) {
+    if (window.openai) {
+      const apply = () => onData(window.openai.toolOutput);
+      window.addEventListener("openai:set_globals", apply);
+      if (window.openai.toolOutput) apply();
+      return {};
+    }
+    let nextId = 1;
+    const pending = new Map();
+    function send(method, params) {
+      return new Promise((resolve, reject) => {
+        const id = nextId++;
+        pending.set(id, { resolve, reject });
+        window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+      });
+    }
+    function notify(method, params) {
+      window.parent.postMessage({ jsonrpc: "2.0", method, params }, "*");
+    }
+    window.addEventListener("message", (event) => {
+      const msg = event.data;
+      if (!msg || msg.jsonrpc !== "2.0") return;
+      if (msg.id !== undefined && pending.has(msg.id)) {
+        const { resolve, reject } = pending.get(msg.id);
+        pending.delete(msg.id);
+        if (msg.error) reject(msg.error); else resolve(msg.result);
+        return;
+      }
+      if (msg.method === "ui/notifications/tool-result") {
+        onData(msg.params && msg.params.structuredContent);
+      }
+      if (msg.method === "ui/notifications/host-context-changed") {
+        const theme = msg.params && msg.params.hostContext && msg.params.hostContext.theme;
+        if (theme) document.documentElement.dataset.hostTheme = theme;
+      }
+    });
+    (async () => {
+      const result = await send("ui/initialize", {
+        protocolVersion: "2026-01-26",
+        appCapabilities: { availableDisplayModes: ["inline"] },
+      });
+      const theme = result && result.hostContext && result.hostContext.theme;
+      if (theme) document.documentElement.dataset.hostTheme = theme;
+      notify("ui/notifications/initialized", {});
+    })();
+    return {};
+  }
+
+  function ringSvg(score) {
+    const r = 40, c = 2 * Math.PI * r;
+    const filled = Math.max(0, Math.min(100, score)) / 100 * c;
+    const color = scoreColorVar(score);
+    return (
+      '<svg width="92" height="92" viewBox="0 0 92 92">' +
+      '<circle cx="46" cy="46" r="' + r + '" fill="none" stroke="var(--border)" stroke-width="9" />' +
+      '<circle cx="46" cy="46" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="9" ' +
+      'stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + (c - filled).toFixed(1) + '" />' +
+      "</svg>"
+    );
+  }
+
+  function chipList(words, cls) {
+    if (!words || words.length === 0) return '<p class="chips" style="color:var(--text-dim);font-size:11.5px;">None</p>';
+    return '<div class="chips">' + words.map((w) => '<span class="chip ' + cls + '">' + escapeHtml(w) + "</span>").join("") + "</div>";
+  }
+
+  function render(data) {
+    const root = document.getElementById("root");
+    if (!data || typeof data.overall_score !== "number") {
+      root.innerHTML = '<p class="empty">No evaluation yet.</p>';
+      return;
+    }
+    const created = data.created_at ? new Date(data.created_at).toLocaleString() : null;
+    root.innerHTML =
+      '<div class="card">' +
+      '<div class="ring-wrap">' + ringSvg(data.overall_score) +
+      '<div class="ring-label"><div class="ring-score">' + Math.round(data.overall_score) + '</div><div class="ring-caption">fit</div></div>' +
+      "</div>" +
+      '<div class="body">' +
+      (data.summary ? '<p class="summary">' + escapeHtml(data.summary) + "</p>" : "") +
+      '<div class="keywords"><h4>Matched</h4>' + chipList(data.matched_keywords, "matched") + "</div>" +
+      '<div class="keywords"><h4>Missing</h4>' + chipList(data.missing_keywords, "missing") + "</div>" +
+      (created ? '<div class="timestamp">Evaluated ' + escapeHtml(created) + "</div>" : "") +
+      "</div>" +
+      "</div>";
+  }
+
+  createBridge(render);
+</script>
+</body>
+</html>
