@@ -95,17 +95,34 @@ mcp = MCPServer(
 )
 
 
+# Hosts a widget may load images from: company logos (the backend's
+# company_logo_url — crawled logos served from our own site, see its
+# app.services.company_logos). Declared in each host's own CSP format, since
+# widgets run in a sandbox that blocks everything else.
+_WIDGET_RESOURCE_DOMAINS = ["https://yabot.jobs"]
+
+
 def _register_widget(name: str, filename: str) -> None:
     """Register one widget's HTML twice: once as the official MCP Apps
     resource (Claude, and any other MCP-Apps-conformant host) and once as
     OpenAI's Apps SDK variant (ChatGPT) — they need distinct URIs because
     each host expects its own mimetype on the resource."""
 
-    @mcp.resource(f"ui://yabot-jobs/{name}", name=f"{name}-mcp-app", mime_type="text/html;profile=mcp-app")
+    @mcp.resource(
+        f"ui://yabot-jobs/{name}",
+        name=f"{name}-mcp-app",
+        mime_type="text/html;profile=mcp-app",
+        meta={"ui": {"csp": {"resourceDomains": _WIDGET_RESOURCE_DOMAINS}}},
+    )
     def mcp_app_resource() -> str:
         return _widget_html(filename)
 
-    @mcp.resource(f"ui://yabot-jobs/{name}.openai", name=f"{name}-openai", mime_type="text/html+skybridge")
+    @mcp.resource(
+        f"ui://yabot-jobs/{name}.openai",
+        name=f"{name}-openai",
+        mime_type="text/html+skybridge",
+        meta={"openai/widgetCSP": {"connect_domains": [], "resource_domains": _WIDGET_RESOURCE_DOMAINS}},
+    )
     def openai_resource() -> str:
         return _widget_html(filename)
 

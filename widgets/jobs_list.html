@@ -27,6 +27,7 @@
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
   .card--pending { opacity: 0.6; }
   .title { font-family: var(--font-display); font-weight: 700; font-size: 14.5px; line-height: 1.3; overflow-wrap: anywhere; }
+  .logo { width: 16px; height: 16px; border-radius: 4px; object-fit: contain; background: #fff; vertical-align: -3px; margin-right: 6px; }
   .company { color: var(--text-dim); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badges { display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0; }
   .badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; padding: 3px 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-deep); white-space: nowrap; }
@@ -44,6 +45,12 @@
 <body>
 <div id="root"><p class="empty">Loading…</p></div>
 <script>
+  // Company logo before the name, when the backend has one; a broken image
+  // just hides itself.
+  function logoImg(url) {
+    if (!url) return "";
+    return '<img class="logo" src="' + escapeHtml(url) + '" alt="" width="16" height="16" loading="lazy" onerror="this.remove()">';
+  }
   function escapeHtml(s) {
     return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
@@ -167,7 +174,7 @@
       const relative = fmtRelative(posting.posted_at);
       card.innerHTML =
         '<div class="title">' + escapeHtml(posting.title || "Untitled posting") + "</div>" +
-        '<div class="company">' + escapeHtml(posting.company_name || "Unknown company") + "</div>" +
+        '<div class="company">' + logoImg(posting.company_logo_url) + escapeHtml(posting.company_name || "Unknown company") + "</div>" +
         (badges.length ? '<div class="badges">' + badges.join("") + "</div>" : "") +
         (posting.location ? '<div class="meta">📍 ' + escapeHtml(posting.location) + "</div>" : "") +
         (salary ? '<div class="meta">' + escapeHtml(salary) + "</div>" : "") +
