@@ -160,8 +160,9 @@
         continue;
       }
       const badges = [];
-      if (posting.workplace_type) badges.push('<span class="badge">' + escapeHtml(titleCase(posting.workplace_type)) + "</span>");
-      if (posting.employment_type) badges.push('<span class="badge">' + escapeHtml(titleCase(posting.employment_type)) + "</span>");
+      // "unknown" means the scan couldn't tell — leave the badge out rather than show it.
+      if (posting.workplace_type && posting.workplace_type !== "unknown") badges.push('<span class="badge">' + escapeHtml(titleCase(posting.workplace_type)) + "</span>");
+      if (posting.employment_type && posting.employment_type !== "unknown") badges.push('<span class="badge">' + escapeHtml(titleCase(posting.employment_type)) + "</span>");
       const salary = fmtSalary(posting.salary_min, posting.salary_max, posting.salary_currency);
       const relative = fmtRelative(posting.posted_at);
       card.innerHTML =
